@@ -87,48 +87,56 @@ def get_DT( addr, mytype ):
         print "Address of DT is out of range."
         return None
     #end if
-    myint, mylong = 0, 0
-    myfloat = 0.0
-    temp, temp1 = 0, 0
-    a0, a1 = "", ""
+    myint, mylong, myfloat, temp, retry = 0, 0L, 0.0, 0, 0
     if mytype == "int" :
+        retry = 0
         while True:
             try:
                 myint = c.read_register( addr )
+                retry += 1
             except:
-                pass
+                if retry > 5:
+                    print "retry too many times"
+                    return None
+                else:
+                    pass
+                #end if-else
             else:
                 break
         #end while
         return myint
     elif mytype == "long" :
+        retry = 0
         while True:
-            try:
-                #mylong = c.read_long(n)
+            try:    
                 temp = c.read_registers( addr, 2 )
-            except:
-                pass
+                retry += 1
+            except: 
+                if retry > 5:
+                    print "retry too many times"
+                    return None
+                else:
+                    pass
+                #end if-else
             else:
-                a0 = struct.pack('H', temp[0])
-                a1 = a0 + struct.pack('H', temp[1])
-                temp1 = struct.unpack('l', a1)
-                mylong =  temp1[0]
-                #print temp1
+                mylong = struct.unpack('l', struct.pack('HH', temp[0], temp[1]))[0]
                 break
         #end while
-        #print "not ready yet"
         return mylong
     elif mytype == "float" :
+        retry = 0
         while True:
             try:
                 temp = c.read_registers( addr, 2 )
             except:
-                pass
+                if retry > 5:
+                    print "retry too many times"
+                    return None
+                else:
+                    pass
+                #end if-else
             else:
-                a0 = struct.pack('H', temp[0])
-                a1 = a0 + struct.pack('H', temp[1])
-                temp1 = struct.unpack('f', a1)
-                myfloat = temp1[0]
+                myfloat = struct.unpack('f', struct.pack('HH', temp[1], temp[1]))[0]
                 break
         #end while
         return myfloat
@@ -165,8 +173,7 @@ def set_DT( addr, myval ):
         return None
     #end if
     retry = 0
-    temp, temp1 = 0, 0
-    word, word1 = 0, 0
+    temp, temp1, long_words = 0, 0, 0
     aa, a0, a1 = "", "", ""
     if type(myval) is int :
         if (myval > 65535) :
@@ -187,22 +194,13 @@ def set_DT( addr, myval ):
             else:
                 break
         #end while
-        #return None
     elif type(myval) is long :
         retry = 0
-        word = (myval & 0x0000FFFF) & 0xFFFF #lo byte
-        word1 = (myval >> 16) & 0xFFFF #hi byte
-        #print hex(word) + ":" + str(word)
-        #print hex(word1) + ":" + str(word1)
-        a0 = struct.pack('H', word)
-        #print a0
-        a1 = struct.pack('H', word1) + a0
-        #print a1
-        temp1 = struct.unpack('l', a1)
-        #print temp1
+        long_words = (myval & 0x0000FFFF) & 0xFFFF, (myval >> 16) & 0xFFFF  #Lo, Hi
+        temp = struct.unpack('l', struct.pack('HH', long_words[1], long_words[0])) #swap to Hi, Lo
         while True:
             try:
-                c.write_long( addr, temp1[0], True )
+                c.write_long( addr, temp[0], True )
                 retry = retry + 1
                 #print retry
             except:
@@ -214,21 +212,15 @@ def set_DT( addr, myval ):
             else:
                 break
         #end while
-        #print "not ready yet"
-        #return temp1[0]
     elif type(myval) is float :
         retry = 0
         aa = hex(struct.unpack('!I', struct.pack('!f', myval))[0])[2:].zfill(8)
-        word = int(aa[4:], 16) #lo byte
-        word1 = int(aa[:4], 16) #hi byte
-        #print word
-        #print word1
-        a0 = struct.pack('H', word)
-        a1 = struct.pack('H', word1) + a0
-        temp1 = struct.unpack('f', a1)
+        float_words = int(aa[4:], 16), int(aa[:4], 16) #Lo, Hi
+        print float_words
+        temp = struct.unpack('f', struct.pack('HH', float_words[1], float_words[0])) #swap to Hi, Lo
         while True:
             try:
-                c.write_float( addr, temp1[0] )
+                c.write_float( addr, temp[0] )
                 retry = retry + 1
             except:
                 if retry > 5 :
@@ -239,8 +231,6 @@ def set_DT( addr, myval ):
             else:
                 break
         #end while
-        #print "not ready yet"
-        #return temp1[0]
     else :
         print "Wrong type found(int, long, float ONLY), please do re-check"
         return None
@@ -277,7 +267,7 @@ print "R101 is: " + str(get_R("101"))
 set_R("101",0)
 set_R("1101",0)
 print "set DT140 to 12.3..."
-set_DT(140, 12.3)
+set_DT(140, 12.5)
 print "DT140 is: " + str(get_DT(140, "float"))
 print "DT1 set to 81"
 set_DT(1, 81)

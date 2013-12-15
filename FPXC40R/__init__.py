@@ -1,5 +1,3 @@
-import threading  
-import time
 import struct
 import minimalmodbus as mb
 

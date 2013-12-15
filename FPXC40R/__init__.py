@@ -1,11 +1,13 @@
 import struct
 import minimalmodbus as mb
+mb.CLOSE_PORT_AFTER_EACH_CALL = True
 
 c = mb.Instrument('COM10', 1)
 c.serial.baudrate = 115200
 print c
 
 def get_R( addr ) :
+    retry = 0
     temp = 0
     addr_len = len( addr )
     #print R_len
@@ -31,11 +33,18 @@ def get_R( addr ) :
         #address transform 
         maddr = ((n_dec * 16) + n_hex) + 2048
         #print maddr
+        retry = 0
         while True:
             try:
+                retry += 1
                 temp = c.read_bit( maddr, 1 ) #1:read R from fp-x, 2:read X from fp-x
             except:
-                pass
+                if retry > 5:
+                    print "get_R retry reaches limit"
+                    return None
+                else:
+                    pass
+                #end if-else
             else:
                 break
         #end while
@@ -46,6 +55,7 @@ def get_R( addr ) :
 def set_R( addr, state ):
     addr_len = len( addr )
     #print R_len
+    retry = 0
     if ( addr_len > 4 ) :
         print "Error address of relay, too long"
         return None
@@ -64,15 +74,22 @@ def set_R( addr, state ):
         #address transform
         maddr = ((n_dec * 16) + n_hex) + 2048
         #print maddr
+        retry = 0
         while True:
             try:
+                retry += 1
                 if state :
                     c.write_bit(maddr,1)
                 else :
                     c.write_bit(maddr,0)
                 #end if-else
             except:
-                pass
+                if retry > 5:
+                    print "set_R retry reaches limit"
+                    return
+                else:
+                    pass
+                #end if-else
             else:
                 break
         #end while
@@ -92,11 +109,11 @@ def get_DT( addr, mytype ):
         retry = 0
         while True:
             try:
-                myint = c.read_register( addr )
                 retry += 1
+                myint = c.read_register( addr )
             except:
                 if retry > 5:
-                    print "retry too many times"
+                    print "get_DT(int) retry reaches limit"
                     return None
                 else:
                     pass
@@ -108,12 +125,12 @@ def get_DT( addr, mytype ):
     elif mytype == "long" :
         retry = 0
         while True:
-            try:    
-                temp = c.read_registers( addr, 2 )
+            try: 
                 retry += 1
+                temp = c.read_registers( addr, 2 )
             except: 
                 if retry > 5:
-                    print "retry too many times"
+                    print "get_DT(long) retry reaches limit"
                     return None
                 else:
                     pass
@@ -127,10 +144,11 @@ def get_DT( addr, mytype ):
         retry = 0
         while True:
             try:
+                retry += 1
                 temp = c.read_registers( addr, 2 )
             except:
                 if retry > 5:
-                    print "retry too many times"
+                    print "get_DT(float) retry reaches limit"
                     return None
                 else:
                     pass
@@ -151,11 +169,12 @@ def get_DTs(addr, n):
     retry = 0
     while True:
         try:
+            retry += 1
             get_values = c.read_registers( addr, n )
-            retry = retry + 1
         except:
             if retry > 5 :
-                break
+                print "get_DTs retry reaches limit"
+                return None
             else:
                 pass
             #end if-else
@@ -183,11 +202,12 @@ def set_DT( addr, myval ):
         retry = 0
         while True:
             try:    
+                retry += 1
                 c.write_register( addr, myval )
-                retry = retry + 1
             except:
                 if retry > 5 :
-                    break
+                    print "set_DT(int) retry reaches limit"
+                    return None
                 else:
                     pass
                 #end if-else
@@ -195,17 +215,18 @@ def set_DT( addr, myval ):
                 break
         #end while
     elif type(myval) is long :
-        retry = 0
         long_words = (myval & 0x0000FFFF) & 0xFFFF, (myval >> 16) & 0xFFFF  #Lo, Hi
         temp = struct.unpack('l', struct.pack('HH', long_words[1], long_words[0])) #swap to Hi, Lo
+        retry = 0
         while True:
             try:
+                retry += 1
                 c.write_long( addr, temp[0], True )
-                retry = retry + 1
                 #print retry
             except:
                 if retry > 5 :
-                    break
+                    print "set_DT(long) retry reaches limit"
+                    return None
                 else:
                     pass
                 #end if-else
@@ -213,18 +234,19 @@ def set_DT( addr, myval ):
                 break
         #end while
     elif type(myval) is float :
-        retry = 0
         aa = hex(struct.unpack('!I', struct.pack('!f', myval))[0])[2:].zfill(8)
         float_words = int(aa[4:], 16), int(aa[:4], 16) #Lo, Hi
         print float_words
         temp = struct.unpack('f', struct.pack('HH', float_words[1], float_words[0])) #swap to Hi, Lo
+        retry = 0
         while True:
             try:
+                retry += 1
                 c.write_float( addr, temp[0] )
-                retry = retry + 1
             except:
                 if retry > 5 :
-                    break
+                    print "set_DT(float) retry reaches limit"
+                    return None
                 else:
                     pass
                 #end if-else
@@ -241,10 +263,11 @@ def set_DTs( addr, myvals ):
     retry = 0
     while True:
         try:
+            retry += 1
             c.write_registers( addr, myvals )
-            retry = retry + 1
         except:
             if retry > 5 :
+                print "set_DTs retry reaches limit"
                 break
             else:
                 pass
@@ -275,3 +298,8 @@ print "DT1 is: " + str(get_DT(1, "int"))
 print "DT400 set to 1600899904"
 set_DT(400, 1600899904l)
 print "DT400 is: " + str(get_DT(400, "long"))
+
+for x in range(100):
+    print get_DTs(399, 20)
+for x in range(100):
+    print get_DTs(400, 40)
